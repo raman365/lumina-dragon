@@ -184,6 +184,7 @@ main {
 /* ---------- hero ---------- */
 
 .hero {
+  position: relative; /* anchors .scroll-hint to the hero, not the page bottom */
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -438,6 +439,74 @@ main {
 .reveal.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ---------- mobile ---------- */
+
+@media (max-width: 640px) {
+  body {
+    font-size: 15.5px;
+  }
+
+  .nav {
+    padding: 14px 18px;
+  }
+
+  .nav-logo {
+    font-size: 12px;
+    letter-spacing: 0.24em;
+  }
+
+  .nav-links {
+    gap: 13px;
+  }
+
+  .nav-links a {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 6px 0; /* keeps the tap target usable at the smaller font */
+  }
+
+  .hero-title {
+    font-size: clamp(48px, 17vw, 90px);
+  }
+
+  .hero-sub {
+    font-size: 15px;
+    max-width: 330px;
+  }
+
+  /* pin the chapter card to the bottom so the dragon stays visible above it */
+  .chapter {
+    align-items: flex-end;
+    padding: 0 16px 10vh;
+  }
+
+  .chapter-left,
+  .chapter-right {
+    justify-content: center;
+  }
+
+  .chapter-inner {
+    max-width: 100%;
+    padding: 22px 20px;
+  }
+
+  .chapter h2 {
+    font-size: 28px;
+  }
+
+  .cards {
+    padding: 10vh 16px 12vh;
+  }
+
+  .cards-title {
+    margin-bottom: 32px;
+  }
+
+  .tilt-card {
+    padding: 24px 20px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

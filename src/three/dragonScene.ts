@@ -5,8 +5,13 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 // import.meta.env.BASE_URL carries Vite's base ('/' in dev, '/lumina-dragon/' on Pages)
 const DRAGON_URL = `${import.meta.env.BASE_URL}dragon.glb`
 const DRAGON_BYTES = 24269912 // fallback when the server omits content-length
-const EMBER_COUNT = 700
 const STAR_COUNT = 2400
+
+// touch devices get fewer particles, a lower DPR cap, and an auto-roaming torch
+const IS_TOUCH =
+  typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+const EMBER_COUNT = IS_TOUCH ? 400 : 700
+const MAX_DPR = IS_TOUCH ? 1.5 : 2
 
 // ---------- camera path: one keyframe per page section ----------
 // p = smoothed scroll fraction; az/el in degrees around the dragon at origin
@@ -97,7 +102,7 @@ export function createDragonScene(
   let disposed = false
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DPR))
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.15
@@ -200,7 +205,7 @@ export function createDragonScene(
   }
   const emberUniforms = {
     uTime: { value: 0 },
-    uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+    uPixelRatio: { value: Math.min(window.devicePixelRatio, MAX_DPR) },
     uTorch: { value: new THREE.Vector3(999, 999, 999) },
   }
   const emberMaterial = new THREE.ShaderMaterial({
@@ -249,8 +254,11 @@ export function createDragonScene(
   let scrollTarget = 0
   let scrollCurrent = 0
 
+  let lastPointerTime = -10
+
   const onPointerMove = (e: PointerEvent) => {
     pointerActive = true
+    lastPointerTime = clock.getElapsedTime()
     mouseNDC.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
     raycaster.setFromCamera(mouseNDC, camera)
     // torch floats between camera and dragon, a few units short of the origin
@@ -267,12 +275,13 @@ export function createDragonScene(
     camera.aspect = window.innerWidth / window.innerHeight
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
-    const pr = Math.min(window.devicePixelRatio, 2)
+    const pr = Math.min(window.devicePixelRatio, MAX_DPR)
     renderer.setPixelRatio(pr)
     emberUniforms.uPixelRatio.value = pr
   }
 
   window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerdown', onPointerMove) // taps place the torch on touch screens
   window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('resize', onResize)
   onScroll()
@@ -281,6 +290,7 @@ export function createDragonScene(
   const auraCyan = new THREE.Color('#22d3ee')
   const auraEmber = new THREE.Color('#ffb700')
   const lookTarget = new THREE.Vector3()
+  const autoDir = new THREE.Vector3()
   const clock = new THREE.Clock()
   let raf = 0
 
@@ -294,13 +304,17 @@ export function createDragonScene(
     const t = smooth(Math.min(Math.max((p - a.p) / (b.p - a.p), 0), 1))
     const az = THREE.MathUtils.degToRad(a.az + (b.az - a.az) * t) + mouseNDC.x * 0.06
     const el = THREE.MathUtils.degToRad(a.el + (b.el - a.el) * t) + mouseNDC.y * 0.04
-    const r = a.r + (b.r - a.r) * t
+    // portrait screens: pull the camera back and recentre the look target so
+    // the dragon stays framed instead of being cropped by the narrow FOV
+    const fit = THREE.MathUtils.clamp(1.35 / camera.aspect, 1, 2)
+    const txScale = Math.min(camera.aspect / 1.2, 1)
+    const r = (a.r + (b.r - a.r) * t) * fit
     camera.position.set(
       r * Math.cos(el) * Math.sin(az),
       r * Math.sin(el),
       r * Math.cos(el) * Math.cos(az),
     )
-    lookTarget.set(a.tx + (b.tx - a.tx) * t, a.ty + (b.ty - a.ty) * t, 0)
+    lookTarget.set((a.tx + (b.tx - a.tx) * t) * txScale, a.ty + (b.ty - a.ty) * t, 0)
     camera.lookAt(lookTarget)
   }
 
@@ -329,7 +343,18 @@ export function createDragonScene(
     const emberMix = smooth(Math.min(Math.max((scrollCurrent - 0.55) / 0.22, 0), 1))
     auraUniforms.uColor.value.copy(auraCyan).lerp(auraEmber, emberMix)
 
-    // torch follows the pointer
+    // torch follows the pointer; on touch screens it roams on its own when
+    // the finger has been idle so the effect is still visible without a cursor
+    if (IS_TOUCH && t - lastPointerTime > 2.5) {
+      pointerActive = true
+      autoDir.copy(camera.position).setY(0).normalize()
+      const sweep = Math.sin(t * 0.55) * 3.5
+      torchTarget.set(
+        autoDir.x * 4.5 - autoDir.z * sweep,
+        1.2 + Math.sin(t * 0.85) * 1.4,
+        autoDir.z * 4.5 + autoDir.x * sweep,
+      )
+    }
     torch.position.lerp(torchTarget, 0.12)
     torch.intensity += ((pointerActive ? 55 : 0) - torch.intensity) * 0.08
     emberUniforms.uTorch.value.copy(torch.position)
@@ -345,6 +370,7 @@ export function createDragonScene(
     disposed = true
     cancelAnimationFrame(raf)
     window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerdown', onPointerMove)
     window.removeEventListener('scroll', onScroll)
     window.removeEventListener('resize', onResize)
     scene.traverse((obj) => {

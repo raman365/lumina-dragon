@@ -6,6 +6,8 @@ function TiltCard({ icon, title, text }: { icon: string; title: string; text: st
   const ref = useRef<HTMLDivElement>(null)
 
   const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    // tilt is a hover affordance; skip it for touch so cards don't wobble while scrolling
+    if (e.pointerType !== 'mouse') return
     const el = ref.current
     if (!el) return
     const rect = el.getBoundingClientRect()
@@ -99,8 +101,8 @@ export default function App() {
           <p className="hero-kicker reveal">a dragon &middot; a torch &middot; a flythrough</p>
           <h1 className="hero-title reveal">LUMINA</h1>
           <p className="hero-sub reveal">
-            Your cursor is a torch &mdash; move it and watch the light crawl across her scales.
-            Scroll, and the camera flies around her.
+            Your cursor is a torch &mdash; move it, or drag a finger, and watch the light crawl
+            across her scales. Scroll, and the camera flies around her.
           </p>
           <div className="scroll-hint reveal">
             <span className="scroll-hint-wheel" />
